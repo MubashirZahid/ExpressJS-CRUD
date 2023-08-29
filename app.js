@@ -1,242 +1,158 @@
-const http = require("http");
+const express = require("express");
 const { success, failure } = require("./util/common");
 const Product = require("./data/index");
 
-const server = http.createServer(function (req, res) {
-  let body = "";
-  req.on("data", (buffer) => {
-    body += buffer;
-  });
+const app = express();
+app.use(express.json());
 
-  req.on("end", async () => {
-    console.log(req.url, req.method);
-
-    // Adding a property
-    if (req.url === "/manga/create" && req.method === "POST") {
-      try {
-        const newData = JSON.parse(body);
-
-        // Validate properties
-        if (newData.id) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.write(
-            failure("Can not have a user defined id property", "Reference")
-          );
-          return res.end();
-        }
-
-        if (!newData.name || newData.name == "" || newData.name.trim() == "") {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.write(failure("Missing valid name property", "Reference"));
-          return res.end();
-        }
-        if (
-          !newData.author ||
-          newData.author == "" ||
-          newData.author.trim() == ""
-        ) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.write(
-            failure("Please input a valid author property", "Reference")
-          );
-          return res.end();
-        }
-        if (!newData.price || newData.price > 15) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.write(
-            failure("Please input a valid price property", "Reference")
-          );
-          return res.end();
-        }
-        if (!newData.stock || newData.stock < 1) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.write(
-            failure("Please input a valid stock property", "Reference")
-          );
-          return res.end();
-        }
-        const result = await Product.addNewProduct(newData);
-
-        if (result.success) {
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.write(success(result.message, result.data));
-        } else {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.write(failure(result.message));
-        }
-        return res.end();
-      } catch (error) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.write(failure("Invalid JSON data"));
-        return res.end();
-      }
+// Get all the products
+app.get("/manga/all", async (req, res) => {
+  try {
+    const result = await Product.getAll();
+    if (result.success) {
+      res
+        .status(200)
+        .send(
+          success("All products received properly", JSON.parse(result.data))
+        );
+    } else {
+      res.send(400).send(failure("Failed to get all data"));
     }
-
-    // Get All Products
-    else if (req.url === "/manga/all" && req.method === "GET") {
-      try {
-        const result = await Product.getAll();
-        if (result.success) {
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.write(
-            success("All products received properly", JSON.parse(result.data))
-          );
-          return res.end();
-        }
-      } catch (error) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.write(failure("Failed to get all data"));
-        return res.end();
-      }
-    }
-
-    // Get a specific product by ID
-    else if (req.url.startsWith("/manga/get") && req.method === "GET") {
-      const getQueryParams = () => {
-        const params = new URLSearchParams(req.url.split("?")[1]);
-        console.log(params);
-        const queryParams = {};
-        for (const param of params) {
-          queryParams[param[0]] = param[1];
-          console.log(queryParams);
-        }
-        return queryParams;
-      };
-
-      const queryParams = getQueryParams();
-      const id = queryParams.id;
-
-      try {
-        const result = await Product.getOneById(id);
-        if (result.success) {
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.write(
-            success("Product retrieved successfully", JSON.parse(result.data))
-          );
-          return res.end();
-        } else {
-          res.writeHead(404, { "Content-Type": "application/json" });
-          res.write(failure(result.message));
-          return res.end();
-        }
-      } catch (error) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.write(failure("Invalid product ID"));
-        return res.end();
-      }
-    }
-
-    // Delete a product by ID
-    else if (req.url.startsWith("/manga/delete") && req.method === "DELETE") {
-      const getQueryParams = () => {
-        const params = new URLSearchParams(req.url.split("?")[1]);
-        console.log(params);
-        const queryParams = {};
-        for (const param of params) {
-          queryParams[param[0]] = param[1];
-          console.log(queryParams);
-        }
-        return queryParams;
-      };
-
-      const queryParams = getQueryParams();
-      const id = queryParams.id;
-
-      try {
-        const result = await Product.deleteById(id);
-        if (result.success) {
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.write(
-            success("Product deleted successfully", JSON.parse(result.data))
-          );
-          return res.end();
-        } else {
-          res.writeHead(404, { "Content-Type": "application/json" });
-          res.write(failure(result.message, result.error));
-          return res.end();
-        }
-      } catch (error) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.write(failure("Invalid product ID", "Runtime Error"));
-        return res.end();
-      }
-    }
-
-    // Update by ID
-    else if (req.url.startsWith("/manga/update") && req.method === "PUT") {
-      const getQueryParams = () => {
-        const params = new URLSearchParams(req.url.split("?")[1]);
-        console.log(params);
-        const queryParams = {};
-        for (const param of params) {
-          queryParams[param[0]] = param[1];
-          console.log(queryParams);
-        }
-        return queryParams;
-      };
-
-      const queryParams = getQueryParams();
-      const id = queryParams.id;
-
-      try {
-        const newData = JSON.parse(body);
-
-        // Validate properties
-        if (!newData.name || newData.name == "" || newData.name.trim() == "") {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.write(failure("Missing valid name property", "Reference"));
-          return res.end();
-        }
-        if (
-          !newData.author ||
-          newData.author == "" ||
-          newData.author.trim() == ""
-        ) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.write(
-            failure("Please input a valid author property", "Reference")
-          );
-          return res.end();
-        }
-        if (!newData.price || newData.price > 15) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.write(
-            failure("Please input a valid price property", "Reference")
-          );
-          return res.end();
-        }
-        if (!newData.stock || newData.stock < 1) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.write(
-            failure("Please input a valid stock property", "Reference")
-          );
-          return res.end();
-        }
-        const result = await Product.updateById(id, newData);
-
-        if (result.success) {
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.write(success(result.message, JSON.parse(result.data)));
-        } else {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.write(failure(result.message));
-        }
-        return res.end();
-      } catch (error) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.write(failure("Invalid JSON data"));
-        return res.end();
-      }
-    }
-    // Handle invalid URL
-    else {
-      res.writeHead(404, { "Content-Type": "application/json" });
-      res.write(failure("Invalid request", "Type"));
-      return res.end();
-    }
-  });
+  } catch (error) {
+    res.status(400).send(failure("Failed to get all data"));
+  }
 });
 
-server.listen(8000, () => {
+// Get a specific product
+app.get("/manga/get", async (req, res) => {
+  const id = req.query.id;
+
+  try {
+    const result = await Product.getOneById(id);
+    if (result.success) {
+      res
+        .status(200)
+        .send(
+          success("Product retrieved successfully", JSON.parse(result.data))
+        );
+    } else {
+      res.status(404).send(failure(result.message));
+    }
+  } catch (error) {
+    res.status(400).send(failure("Invalid request"));
+  }
+});
+
+// Add a Product
+app.post("/manga/create", async (req, res) => {
+  try {
+    const newData = req.body;
+
+    // Validate properties
+    if (newData.id) {
+      return res
+        .status(400)
+        .send(failure("Can not have a user defined id property", "Reference"));
+    }
+    if (!newData.name || newData.name == "" || newData.name.trim() == "") {
+      return res
+        .status(400)
+        .send(failure("Missing valid name property", "Reference"));
+    }
+    if (
+      !newData.author ||
+      newData.author == "" ||
+      newData.author.trim() == ""
+    ) {
+      return res
+        .status(400)
+        .send(failure("Please input a valid author property", "Reference"));
+    }
+    if (!newData.price || newData.price > 15) {
+      return res
+        .status(400)
+        .send(failure("Please input a valid price property", "Reference"));
+    }
+    if (!newData.stock || newData.stock < 1) {
+      return res
+        .status(400)
+        .send(failure("Please input a valid stock property", "Reference"));
+    }
+
+    const result = await Product.addNewProduct(newData);
+
+    if (result.success) {
+      res.status(200).send(success(result.message, result.data));
+    } else {
+      res.status(500).send(failure(result.message));
+    }
+  } catch (error) {
+    res.status(400).send(failure("Invalid JSON data"));
+  }
+});
+
+// Update a Product
+app.put("/manga/update", async (req, res) => {
+  const { id } = req.query;
+
+  try {
+    const newData = req.body;
+    const validationErrors = {};
+
+    // Validate properties
+    if (!newData.name || newData.name.trim() === "") {
+      validationErrors.name = "Missing valid name property";
+    }
+    if (!newData.author || newData.author.trim() === "") {
+      validationErrors.author = "Please input a valid author property";
+    }
+    if (!newData.price || newData.price > 15) {
+      validationErrors.price = "Please input a valid price property";
+    }
+    if (!newData.stock || newData.stock < 1) {
+      validationErrors.stock = "Please input a valid stock property";
+    }
+
+    if (Object.keys(validationErrors).length > 0) {
+      return res
+        .status(400)
+        .send(failure("Validation errors", validationErrors));
+    }
+
+    const result = await Product.updateById(id, newData);
+
+    if (result.success) {
+      res.status(200).send(success(result.message, JSON.parse(result.data)));
+    } else {
+      res.status(500).send(failure(result.message));
+    }
+  } catch (error) {
+    res.status(400).send(failure(result.message));
+  }
+});
+
+// Delete a Product
+app.delete("/manga/delete", async (req, res) => {
+  const { id } = req.query;
+
+  try {
+    const result = await Product.deleteById(id);
+    if (result.success) {
+      res
+        .status(200)
+        .send(success("Product deleted successfully", JSON.parse(result.data)));
+    } else {
+      res.status(404).send(failure(result.message, result.error));
+    }
+  } catch (error) {
+    res.status(400).send(failure("Invalid request", "Runtime Error"));
+  }
+});
+
+app.use((req, res) => {
+  res.status(404).send(failure("Invalid request", "Type"));
+});
+
+app.listen(8000, () => {
   console.log("Server is running on 8000...");
 });
